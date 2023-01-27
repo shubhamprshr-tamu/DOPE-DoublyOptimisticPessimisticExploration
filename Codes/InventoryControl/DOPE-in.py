@@ -1,9 +1,9 @@
 #Imports
+import time
 import numpy as np
 import pandas as pd
 from UtilityMethods_in import utils
 import matplotlib.pyplot as plt
-import time
 import os
 import math
 import pickle
@@ -25,6 +25,9 @@ np.random.seed(RUN_NUMBER)
 #RUN_NUMBER = 0
 
 #Initialize:
+"""
+  Initialize parameters according to environment. 
+"""
 f = open('model-in.pckl', 'rb')
 [NUMBER_SIMULATIONS, NUMBER_EPISODES, P, R, C, CONSTRAINT, N_STATES, actions, EPISODE_LENGTH, DELTA] = pickle.load(f)
 f.close()
@@ -36,6 +39,9 @@ f.close()
 
 
 f = open('base-in.pckl', 'rb')
+"""
+  DOPE requires a safe policy that runs till K0 episodes. Here we are loading the same.
+"""
 [pi_b, val_b, cost_b, q_b] = pickle.load(f)
 f.close()
 
@@ -47,11 +53,18 @@ M = 1024* N_STATES*EPISODE_LENGTH**2/EPS**2
 
 Cb = cost_b[0, 0]
 
-print(CONSTRAINT - Cb)
-
+"""
+  Find K0 based on Paradigm (4) of the paper.
+  Crucial step in the algorithm, since this parameter determines the switch from b_0 to b_k.
+  Since Number of S = A, it becomes S^3.
+"""
 K0 = N_STATES**3*EPISODE_LENGTH**3/((CONSTRAINT - Cb)**2) 
+K0_approx = int(K0)
 
-NUMBER_EPISODES = int(NUMBER_EPISODES)
+"""
+    Experimental Setup and initialization from model.pth.
+"""
+NUMBER_EPISODES = int(50000)
 NUMBER_SIMULATIONS = int(NUMBER_SIMULATIONS)
 
 STATES = np.arange(N_STATES)
@@ -62,6 +75,9 @@ ConRegret2 = np.zeros((NUMBER_SIMULATIONS,NUMBER_EPISODES))
 NUMBER_INFEASIBILITIES = np.zeros((NUMBER_SIMULATIONS, NUMBER_EPISODES))
 
 
+"""
+    Calculating L, as per paper.
+"""
 L = math.log(6 * N_STATES**2 * EPISODE_LENGTH * NUMBER_EPISODES / DELTA)#math.log(2 * N_STATES * EPISODE_LENGTH * NUMBER_EPISODES * N_STATES**2 / DELTA)
 
 for sim in range(NUMBER_SIMULATIONS):
@@ -71,7 +87,11 @@ for sim in range(NUMBER_SIMULATIONS):
     objs = []
     cons = []
     for episode in range(NUMBER_EPISODES):
-        
+        """
+            Main Part of the algorithm.
+            If episode <= K0: then execute base policy, 
+            else: pi_k.
+        """
         if episode <= K0:
             pi_k = pi_b
             val_k = val_b
@@ -84,6 +104,10 @@ for sim in range(NUMBER_SIMULATIONS):
             util_methods.setCounts(ep_count_p, ep_count)
             util_methods.update_empirical_model(0)
             util_methods.compute_confidence_intervals(L, 0)
+            """
+              Solve the linear equation as per the paper's appendix.
+              This helps in calculating pi_k.
+            """
             pi_k, val_k, cost_k, log, q_k = util_methods.compute_extended_LP(0, Cb)
             if log != 'Optimal':  #Added this part to resolve issues about infeasibility. Because I am not sure about the value of K0, this condition would take care of that
                 # pi_k = pi_b
@@ -92,8 +116,12 @@ for sim in range(NUMBER_SIMULATIONS):
                 # q_k = q_b
                 print(log)
 
-
-        
+        """
+            Calculating evaluation metrics.
+            1. Objective Regret
+            2. Constrain Regret
+            This value is later plotted.
+        """
         if episode == 0:
             ObjRegret2[sim, episode] = abs(val_k[0, 0] - opt_value_LP_con[0, 0])
             ConRegret2[sim, episode] = max(0, cost_k[0, 0] - CONSTRAINT)
@@ -118,8 +146,15 @@ for sim in range(NUMBER_SIMULATIONS):
             #if sum(prob) != 1:
             #    print(s, h)
             #    print(prob)
+            """
+              Take action as per policy above, and calculated action probabilites.
+              Observe the next_state, reward and cost.
+            """
             a = int(np.random.choice(STATES, 1, replace = True, p = prob))
             next_state, rew, cost = util_methods.step(s, a, h)
+            """
+              Update counts for -> (s,a) and (s,a,next_state).
+            """
             ep_count[s, a] += 1
             ep_count_p[s, a, next_state] += 1
             s = next_state
@@ -137,7 +172,9 @@ for sim in range(NUMBER_SIMULATIONS):
             pickle.dump([NUMBER_SIMULATIONS, NUMBER_EPISODES, objs , cons, pi_k, NUMBER_INFEASIBILITIES, q_k], f)
             f.close()
         
-
+"""
+  Take mean and std dev for both evaluation metrics.
+"""
 ObjRegret_mean = np.mean(ObjRegret2, axis = 0)
 ConRegret_mean = np.mean(ConRegret2, axis = 0)
 ObjRegret_std = np.std(ObjRegret2, axis = 0)
@@ -147,7 +184,11 @@ ConRegret_std = np.std(ConRegret2, axis = 0)
 
 #print(util_methods.NUMBER_OF_OCCURANCES[0])
 
-
+"""
+  Plot the metrics.
+  Metric 1. 
+  Objective Regret.
+"""
 title = 'OPSRL' + str(RUN_NUMBER)
 plt.figure()
 plt.plot(range(NUMBER_EPISODES), ObjRegret_mean)
@@ -158,6 +199,10 @@ plt.ylabel('Objective Regret')
 plt.title(title)
 plt.show()
 
+"""
+  Metric 2.
+  Square Root of Objective Regret.
+"""
 time = np.arange(1, NUMBER_EPISODES+1)
 squareroot = [int(b) / int(m) for b,m in zip(ObjRegret_mean, np.sqrt(time))]
 
@@ -170,6 +215,11 @@ plt.ylabel('Objective Regret square root curve')
 plt.title(title)
 plt.show()
 
+"""
+  Metric 3.
+  Constraint Regret.
+"""
+
 plt.figure()
 plt.plot(range(NUMBER_EPISODES), ConRegret_mean)
 plt.fill_between(range(NUMBER_EPISODES), ConRegret_mean - ConRegret_std, ConRegret_mean + ConRegret_std, alpha = 0.5)
@@ -178,4 +228,3 @@ plt.xlabel('Episodes')
 plt.ylabel('Constraint Regret')
 plt.title(title)
 plt.show()
-

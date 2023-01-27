@@ -66,7 +66,7 @@ class utils:
                     if self.P[s][a][s_1] > 0:
                         self.Psparse[s][a].append(s_1)
     
-
+    # This function helps take a next step in the environment.
     def step(self,s, a, h):
         probs = np.zeros((self.N_STATES))
         for next_s in range(self.N_STATES):
@@ -76,7 +76,7 @@ class utils:
         cost = self.C[s][a]
         return next_state,rew, cost
 
-
+    # Update state, action pair counts for episode.
     def setCounts(self,ep_count_p,ep_count):
         for s in range(self.N_STATES):
             for a in self.ACTIONS[s]:
@@ -292,7 +292,11 @@ class utils:
         #     r_k[s] = np.zeros(l)
         #     for a in self.ACTIONS[s]:
         #         r_k[s][a] = self.R[s][a] + self.EPISODE_LENGTH**2/(self.CONSTRAINT - cb)* self.beta_prob_2[s][a]
-
+        """
+            Constrained MDP formulation.
+            Max reward with regards to a constraint.
+            Refer Eq 7 and Eq 18.
+        """
         opt_prob += p.lpSum([z[(h,s,a,s_1)]*self.R[s][a] for h in range(self.EPISODE_LENGTH) for s in range(self.N_STATES) for a in self.ACTIONS[s] for s_1 in self.Psparse[s][a]])
         #Constraints
         opt_prob += p.lpSum([z[(h,s,a,s_1)]*(self.C[s][a] + self.EPISODE_LENGTH*self.beta_prob_2[s][a]) for h in range(self.EPISODE_LENGTH) for s in range(self.N_STATES) for a in self.ACTIONS[s] for s_1 in self.Psparse[s][a]]) - self.CONSTRAINT <= 0
@@ -343,8 +347,13 @@ class utils:
             for s in range(self.N_STATES):
                 sum_prob = 0
                 for a in self.ACTIONS[s]:
+                    """
+                        Extended solution of the linear problem.
+                        Gives us probability.
+                    """
                     opt_policy[s,h,a] = num[h,s,a]/den[h,s]
                     sum_prob += opt_policy[s,h,a]
+                """ Corner cases. """
                 if abs(sum(num[h,s,:]) - den[h,s]) > 0.0001:
                     print("wrong values")
                     print(sum(num[h,s,:]),den[h,s])
