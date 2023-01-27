@@ -31,7 +31,7 @@ def O(x):
     if x > 0:
         return K + 2*x
     return 0
-
+# Number of states.
 N_STATES = 6
 actions = {}
 
@@ -44,11 +44,12 @@ P = {}
 
 demand = [0.3,0.2,0.2,0.2,0.05,0.05]
 
+# Number of actions for each state.
 for s in range(N_STATES):
     actions[s] = []
     for a in range(N_STATES - s):
         actions[s].append(a)
-
+# Initializing reward, cost and P for each state, action pair.
 for s in range(N_STATES):
     l = len(actions[s])
     R[s] = np.zeros(l)
@@ -102,6 +103,7 @@ EPISODE_LENGTH = 7
 
 CONSTRAINT = EPISODE_LENGTH/2
 
+# Baseline Policy.
 C_b = CONSTRAINT/5  #Change this if you want different baseline policy.
 
 NUMBER_EPISODES = 1e6
